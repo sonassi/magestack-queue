@@ -28,8 +28,18 @@ return [
     // Google anayltics tracking code
     'ga_code' => '',
 
-    // These settings should not need to be adjusted
-    'db_name' => 'queue.sqlite',
+    // Database backend
+    // sqlite: For single-server/low volume deployments
+    // mysql:  For multi-server/high volume deployments
+    'database' => [
+        'driver' => 'sqlite',
+        'name' => 'queue',
+        'user' => '',
+        'password' => '',
+        'host' => '',
+    ],
+
     'table_name' => 'queue',
+
     'path' => realpath(dirname(__FILE__))
 ];

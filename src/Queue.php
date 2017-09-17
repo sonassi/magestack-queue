@@ -2,7 +2,8 @@
 
 namespace MageStack\Queue;
 
-use SQLite3;
+use MageStack\Queue\Backend\SQLite;
+use MageStack\Queue\Backend\MySQL;
 
 class Queue
 {
@@ -16,8 +17,17 @@ class Queue
 
     public function __construct($config)
     {
-        $pathToDb = $config['path'].'/'.$config['db_name'];
-        $this->db = new SQLite3($pathToDb);
+
+        switch ($config['database']['driver']) {
+            case 'sqlite':
+                $pathToDb = $config['path']. '/' .$config['database']['name'] . '.sqlite';
+                $this->db = new SQLite($pathToDb);
+                break;
+
+            case 'mysql':
+                $this->db = new MySQL($config['database']);
+                break;
+        }
 
         $this->tableName = $config['table_name'];
         $this->threshold = $config['threshold'];
@@ -33,9 +43,9 @@ class Queue
             CREATE TABLE IF NOT EXISTS {$this->tableName} (
             ip VARCHAR(50) NOT NULL UNIQUE,
             is_queueing BOOLEAN NOT NULL DEFAULT 0,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            created_at TIMESTAMP NULL DEFAULT NULL,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            entered_at TIMESTAMP DEFAULT NULL,
+            entered_at TIMESTAMP NULL DEFAULT NULL,
             waiting_time INT(5) NOT NULL DEFAULT 0)";
 
         $result = $this->db->exec($query);
@@ -90,7 +100,7 @@ class Queue
         $result = $this->db->query($query);
         $row = $result->fetchArray();
 
-        return isset($row['counter']) ? (int)$row['counter'] : 0;
+        return isset($row['counter']) ? (int) $row['counter'] : 0;
     }
 
     public function insertOrUpdateVisitor($ip, $queue = 0)
@@ -99,8 +109,8 @@ class Queue
 
         if (!$existingData) {
             $query = "
-                INSERT INTO {$this->tableName} (ip, is_queueing)
-                VALUES ('{$ip}', {$queue})";
+                INSERT INTO {$this->tableName} (ip, is_queueing, created_at)
+                VALUES ('{$ip}', {$queue}, '" . date('Y-m-d H:i:s') . "')";
             $createdAt = date('Y-m-d H:i:s');
         } else {
             $query = "
@@ -117,7 +127,7 @@ class Queue
 
             $query = "
                 UPDATE {$this->tableName}
-                SET entered_at = DATETIME('now', 'localtime'), waiting_time = {$waitingTime}
+                SET entered_at = '" . date('Y-m-d H:i:s') . "', waiting_time = {$waitingTime}
                 WHERE ip = '{$ip}'";
             $result = $this->db->exec($query);
 
@@ -133,7 +143,7 @@ class Queue
     {
         $query = "
             UPDATE {$this->tableName}
-            SET updated_at = DATETIME('now', 'localtime')
+            SET updated_at = '" . date('Y-m-d H:i:s') . "'
             WHERE ip = '{$ip}'";
         $result = $this->db->exec($query);
 
@@ -199,24 +209,37 @@ class Queue
     {
         $query = "
             DELETE FROM {$this->tableName}
-            WHERE updated_at < DATETIME('now','-{$this->timer} seconds', 'localtime')";
+            WHERE updated_at < '". date('Y-m-d H:i:s', time() - $this->timer) . "'";
         $result = $this->db->exec($query);
 
         $visitorsCount = $this->getVisitorCount();
-        $slotLeft = $this->threshold - $visitorsCount;
+        $slotsAvailable = $this->threshold - $visitorsCount;
 
-        if ($slotLeft > 0) {
+        // This code normally would be done in a single query
+        // but MySQL and SQLite don't support the same methods
+        // Ie. Limit in subquery
+        if ($slotsAvailable > 0) {
             $query = "
-                UPDATE {$this->tableName}
-                SET is_queueing = 0
-                WHERE ip IN (
-                    SELECT ip
-                    FROM  {$this->tableName}
-                    WHERE is_queueing = 1
-                    ORDER BY updated_at
-                    DESC LIMIT 0, {$slotLeft}
-                )";
-            $result = $this->db->exec($query);
+                SELECT ip
+                FROM  {$this->tableName}
+                WHERE is_queueing = 1
+                ORDER BY updated_at
+                DESC LIMIT 0, {$slotsAvailable}";
+            $result = $this->db->query($query);
+
+            $ips = [];
+            while ($row = $result->fetchArray()) {
+                $ips[] = $row['ip'];
+            }
+
+            if (count($ips)) {
+                $ips = implode("','", $ips);
+                $query = "
+                    UPDATE {$this->tableName}
+                    SET is_queueing = 0
+                    WHERE ip IN ('{$ips}')";
+                $result = $this->db->exec($query);
+            }
         }
     }
 

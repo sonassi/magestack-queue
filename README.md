@@ -87,6 +87,14 @@ There are files you should customise to configure the module,
 
 ### Variables
 
+**Database Driver**
+
+    sqlite|mysql
+
+The module comes with support for SQLite (for smaller/low-volume deployments) and full MySQL support. For standalone servers looking to implement a queue, or for testing purposes, the built in SQLite database is more than adequate, however for large scale promotions a dedicated MySQL database should be created.
+
+You can create a database by following [this guide](https://www.sonassi.com/help/mysql/adding-a-new-database-and-user) and update the configuration accordingly.
+
 **Whitelist**
 
     regex (array of strings)
