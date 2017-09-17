@@ -43,6 +43,12 @@ class Queue
         return $result;
     }
 
+    public function flushQueue()
+    {
+        $query = "DELETE FROM {$this->tableName}";
+        return ($this->db->query($query)) ? true : false;
+    }
+
     public function getVisitorCount()
     {
         $query = "
@@ -83,9 +89,9 @@ class Queue
                 WHERE ip = '{$ip}'";
             $result = $this->db->exec($query);
 
-            setcookie('queue_status', 'bypass', time() + $this->timer*60);
+            setcookie('queue_status', 'bypass', time() + $this->timer*3600);
         } else
-            setcookie('queue_status', 'queueing', time() + $this->timer*60);
+            setcookie('queue_status', 'queueing', time() + $this->timer*3600);
 
 
         return $result;
@@ -143,9 +149,7 @@ class Queue
         $query = "
             SELECT ip
             FROM {$this->tableName}
-            WHERE is_queueing = 1
-            ORDER BY updated_at
-            DESC";
+            WHERE is_queueing = 1";
         $result = $this->db->query($query);
 
         $pos = 1;
@@ -163,7 +167,7 @@ class Queue
     {
         $query = "
             DELETE FROM {$this->tableName}
-            WHERE updated_at < datetime('now','-{$this->timer} minutes')";
+            WHERE updated_at < datetime('now','-{$this->timer} seconds')";
         $result = $this->db->exec($query);
 
         $visitorsCount = $this->getVisitorCount();
@@ -184,10 +188,19 @@ class Queue
         }
     }
 
-    public function showTemplate($ip)
+    public function showQueueAndDie($ip)
     {
-        $tpl = file_get_contents($this->path.'/templates/queue.phtml');
-        $tpl = str_ireplace('{{queue_position}}', $this->getPosition($ip), $tpl);
-        echo $tpl;
+        $template = file_get_contents($this->path . '/src/view/queue-landing.phtml');
+        $template = str_ireplace(
+            ['{{queue_position}}', '{{remote_addr}}'],
+            [$this->getPosition($ip), $ip],
+            $template);
+
+        header('HTTP/1.1 503 Service Temporarily Unavailable');
+        header('Status: 503 Service Temporarily Unavailable');
+        header('Retry-After: 300');
+
+        echo $template;
+        exit();
     }
 }

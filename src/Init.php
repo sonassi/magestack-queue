@@ -31,6 +31,7 @@ Usage:  php -f queue.php -- [options]
 
     --install       Create SQL Lite database for tracking queue entries
     --cron          Update the queue metrics
+    --flush         Delete entire queue (both users in and out of the queue)
 
 USAGE;
     }
@@ -40,7 +41,8 @@ USAGE;
         $shortopts  = "";
         $longopts  = [
             'install',
-            'cron'
+            'cron',
+            'flush'
         ];
         $options = getopt($shortopts, $longopts);
 
@@ -62,19 +64,25 @@ USAGE;
             $this->queue->updateQueueEntries();
             printf("Metrics updated sucessfully\n");
             exit();
+        } else if (isset($options['flush'])) {
+            $this->queue->flushQueue();
+            printf("Queue flushed sucessfully\n");
+            exit();
         }
+
     }
 
     private function startQueue($ip)
     {
         $data = $this->queue->getDataByIp($ip);
 
-        if ($data) { //The IP is already using the site, we update them
+        // The IP is already accessing the site, so update information
+        if ($data) {
             if ($this->queue->isQueueing($ip)) {
                 if ($this->queue->checkAccess($ip))
                     return;
 
-                $this->queue->showTemplate($ip); //To queuing page
+                $this->queue->showQueueAndDie($ip); //To queuing page
                 exit;
             } else {
                 if (is_null($data['entered_at'])) {
@@ -88,7 +96,7 @@ USAGE;
             if ($this->queue->checkAccess($ip))
                 return;
 
-            $this->queue->showTemplate($ip); //To queuing page
+            $this->queue->showQueueAndDie($ip); //To queuing page
             exit;
         }
     }
@@ -111,7 +119,6 @@ USAGE;
 
         if (isset($whitelist['uri']) && is_array($whitelist['uri'])) {
             foreach ($whitelist['uri'] as $uri) {
-                var_dump($uri);
                 $regex = sprintf('#%s#', $uri);
                 if (preg_match($regex, $_SERVER['REQUEST_URI']))
                     return false;

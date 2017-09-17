@@ -18,10 +18,15 @@ return [
     'enabled' => true,
 
     // Maximim number of users on site at any time
+    // Set value to -1 to force everyone into the queue
     'threshold' => 1,
 
-    // Period of time a user can be idle in queue before being kicked out
-    'timer' => 10,
+    // Period of time a user can be idle in queue before being
+    // kicked out (in seconds)
+    'timer' => 1,
+
+    // Google anayltics tracking code
+    'ga_code' => '',
 
     // These settings should not need to be adjusted
     'db_name' => 'queue.sqlite',

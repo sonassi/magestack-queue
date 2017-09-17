@@ -1,7 +1,7 @@
 {
     "name": "magestack/queue",
     "description": "MageStack queuing module for all PHP applications",
-    "version": "0.0.1",
+    "version": "1.0.0",
     "type": "package",
     "source": {
         "url": "git://github.com/sonassi/magestack-queue.git",

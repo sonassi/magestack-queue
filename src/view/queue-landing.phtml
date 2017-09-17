@@ -10,7 +10,6 @@
            form { margin-top: 50px; }
            .main-div { background-color:white; margin-top:150px; padding:20px 50px 50px 50px; }
            .pos { color: #ab4324; font-size: 25px; font-weight: 800; border: 1px solid #C0C0C0; width: 50px; height: 35px; text-align: center; display: inline-block; }
-
        </style>
 
        <meta http-equiv="refresh" content="60" />
@@ -21,16 +20,26 @@
 
             <h1>We are pretty busy!</h1>
 
-            <p>Our site is pretty busy right now, but keep clicking below to get in and shop!</p>
-            <p>This page will refresh automatically, don't close the page so you don't lose your slot</p>
+            <p>Our site is pretty busy right now, but please hold on and you'll get in soon.</p>
+            <p>This page will refresh automatically, don't close the page else you may lose your slot.</p>
 
             <p>Your position in the queue: <big class="pos">{{queue_position}}</big></p>
-
-            <form action="" method="POST">
-                <input type="hidden" name="referrer" value="<?php echo $_SERVER['REQUEST_URI']; ?>" />
-                <input type="submit" class="submit-button" name="retry" value="Try again" />
-            </form>
-
        </div>
-</body>
+
+      <script type="text/javascript">
+          var wcIsGtm = false;
+          var productImpressions = [];
+          var promoImpressions = [];
+          var wcGuaTrackerName = '';
+
+          (function(w,e,b,c,oo,ki,ng){w['GoogleAnalyticsObject']=oo;w[oo]=w[oo]||function(){
+              (w[oo].q=w[oo].q||[]).push(arguments)},w[oo].l=1*new Date();ki=e.createElement(b),
+              ng=e.getElementsByTagName(b)[0];ki.async=1;ki.src=c;ng.parentNode.insertBefore(ki,ng)
+              })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+          ga('create', '{{ga_code}}', 'auto');
+          ga('set', 'page', 'Queue');
+          ga('send', 'pageview');
+      </script>
+  </body>
 </html>
