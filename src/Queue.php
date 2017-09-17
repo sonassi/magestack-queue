@@ -117,7 +117,7 @@ class Queue
 
             $query = "
                 UPDATE {$this->tableName}
-                SET entered_at = DATETIME('now'), waiting_time = {$waitingTime}
+                SET entered_at = DATETIME('now', 'localtime'), waiting_time = {$waitingTime}
                 WHERE ip = '{$ip}'";
             $result = $this->db->exec($query);
 
@@ -133,7 +133,7 @@ class Queue
     {
         $query = "
             UPDATE {$this->tableName}
-            SET updated_at = DATETIME('now')
+            SET updated_at = DATETIME('now', 'localtime')
             WHERE ip = '{$ip}'";
         $result = $this->db->exec($query);
 
@@ -199,7 +199,7 @@ class Queue
     {
         $query = "
             DELETE FROM {$this->tableName}
-            WHERE updated_at < DATETIME('now','-{$this->timer} seconds')";
+            WHERE updated_at < DATETIME('now','-{$this->timer} seconds', 'localtime')";
         $result = $this->db->exec($query);
 
         $visitorsCount = $this->getVisitorCount();
