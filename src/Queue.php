@@ -49,16 +49,30 @@ class Queue
         return ($this->db->query($query)) ? true : false;
     }
 
+    public function simulateQueue($queueSize)
+    {
+        for ($i = 0; $i <= $queueSize; $i++) {
+            $ip = long2ip(rand(167772160, 184549375));
+            $inQueue = ($i >= $this->threshold) ? 1 : 0;
+            $this->insertOrUpdateVisitor($ip, $inQueue);
+        }
+    }
+
     public function getStatus()
     {
         $query = "
-            SELECT count(ip) AS counter
+            SELECT *
             FROM {$this->tableName}";
         $result = $this->db->query($query);
-        $row = $result->fetchArray();
+
+        $visitors = [];
+        while ($row = $result->fetchArray()) {
+            $visitors[] = $row;
+        }
 
         $result = [
-            'total_visitors' => isset($row['counter']) ? (int) $row['counter'] : 0,
+            'visitors' => $visitors,
+            'total_visitors' => count($visitors),
             'visitors_on_site' => $this->getVisitorCount(),
         ];
 
@@ -185,7 +199,7 @@ class Queue
     {
         $query = "
             DELETE FROM {$this->tableName}
-            WHERE updated_at < datetime('now','-{$this->timer} seconds')";
+            WHERE updated_at < DATETIME('now','-{$this->timer} seconds')";
         $result = $this->db->exec($query);
 
         $visitorsCount = $this->getVisitorCount();

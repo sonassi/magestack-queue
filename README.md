@@ -129,7 +129,34 @@ The `queue-landing.phtml` file is what is shown to the user when they are active
 
 No PHP is supported in this file - although JavaScript is (provided your library is externally hosted).
 
+## Simulating queue
+
+You can fill the queue with artificial queuing customers like so,
+
+~~~~
+php queue.php --flush
+php queue.php --simulate 100  # Where 100 is the number of users to put in the queue
+~~~~
+
+Then observe the queue status,
+
+~~~~
+php queue.php --status
+~~~~
+
 ### Appendix
+
+### Command line arguments / Usage
+
+~~~~
+Usage:  php -f queue.php -- [options]
+
+    --install          Create SQL Lite database for tracking queue entries
+    --cron             Update the queue metrics
+    --flush            Delete entire queue (both users in and out of the queue)
+    --status           Show queue statistics
+    --simulate [0-9]+  Insert defined number of users into the queue
+~~~~
 
 ### Common bootstraps
 

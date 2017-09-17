@@ -29,10 +29,11 @@ class Init
         return <<<USAGE
 Usage:  php -f queue.php -- [options]
 
-    --install       Create SQL Lite database for tracking queue entries
-    --cron          Update the queue metrics
-    --flush         Delete entire queue (both users in and out of the queue)
-    --status        Show queue statistics
+    --install          Create SQL Lite database for tracking queue entries
+    --cron             Update the queue metrics
+    --flush            Delete entire queue (both users in and out of the queue)
+    --status           Show queue statistics
+    --simulate [0-9]+  Insert defined number of users into the queue
 
 USAGE;
     }
@@ -44,7 +45,8 @@ USAGE;
             'install',
             'cron',
             'flush',
-            'status'
+            'status',
+            'simulate:'
         ];
         $options = getopt($shortopts, $longopts);
 
@@ -70,6 +72,10 @@ USAGE;
             $this->queue->flushQueue();
             printf("Queue flushed sucessfully\n");
             exit();
+        }  else if (isset($options['simulate'])) {
+            $this->queue->simulateQueue($options['simulate']);
+            printf("Inserted %s simulated users\n", $options['simulate']);
+            exit();
         } else if (isset($options['status'])) {
             $this->getStatus();
             exit();
@@ -91,7 +97,25 @@ Users in queue:  {$results['visitors_in_queue']}
 Users on site:   {$results['visitors_on_site']}
 Total users:     {$results['total_visitors']}
 
+Visitors
+========
+
 STATUS;
+
+        $mask = "|%9.9s | %-15.15s | %-8.8s |\n";
+        printf($mask, 'Position', 'IP', 'Status');
+        $position = 1;
+        foreach ($results['visitors'] as $visitor) {
+            printf(
+                $mask,
+                $position,
+                $visitor['ip'],
+                ($visitor['is_queueing']) ? 'Queuing' : 'Browsing'
+            );
+            if ($visitor['is_queueing'] == 1)
+                $position++;
+        }
+
     }
 
     private function startQueue($ip)
