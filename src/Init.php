@@ -6,11 +6,11 @@ class Init
 {
     public function __construct()
     {
-        $config = include realpath(__DIR__) . '/../config.php';
+        $this->config = include realpath(__DIR__) . '/../config.php';
 
-        if ($this->shouldInit($config['whitelist'])) {
+        if ($this->shouldInit($this->config['whitelist'])) {
 
-            $this->queue = new Queue($config);
+            $this->queue = new Queue($this->config);
 
             if ($this->isCli()) {
                 $this->configure();
@@ -32,6 +32,7 @@ Usage:  php -f queue.php -- [options]
     --install       Create SQL Lite database for tracking queue entries
     --cron          Update the queue metrics
     --flush         Delete entire queue (both users in and out of the queue)
+    --status        Show queue statistics
 
 USAGE;
     }
@@ -42,7 +43,8 @@ USAGE;
         $longopts  = [
             'install',
             'cron',
-            'flush'
+            'flush',
+            'status'
         ];
         $options = getopt($shortopts, $longopts);
 
@@ -68,8 +70,28 @@ USAGE;
             $this->queue->flushQueue();
             printf("Queue flushed sucessfully\n");
             exit();
+        } else if (isset($options['status'])) {
+            $this->getStatus();
+            exit();
         }
 
+    }
+
+    private function getStatus()
+    {
+        $results = $this->queue->getStatus();
+        $enabled = ($this->config['enabled']) ? 'Enabled' : 'Disabled';
+        echo <<<STATUS
+Status:          {$enabled}
+
+Threshold:       {$this->config['threshold']} users
+Time on site:    {$this->config['timer']} seconds
+
+Users in queue:  {$results['visitors_in_queue']}
+Users on site:   {$results['visitors_on_site']}
+Total users:     {$results['total_visitors']}
+
+STATUS;
     }
 
     private function startQueue($ip)

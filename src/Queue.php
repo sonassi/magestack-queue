@@ -49,6 +49,24 @@ class Queue
         return ($this->db->query($query)) ? true : false;
     }
 
+    public function getStatus()
+    {
+        $query = "
+            SELECT count(ip) AS counter
+            FROM {$this->tableName}";
+        $result = $this->db->query($query);
+        $row = $result->fetchArray();
+
+        $result = [
+            'total_visitors' => isset($row['counter']) ? (int) $row['counter'] : 0,
+            'visitors_on_site' => $this->getVisitorCount(),
+        ];
+
+        $result['visitors_in_queue'] = $result['total_visitors'] - $result['visitors_on_site'];
+
+        return $result;
+    }
+
     public function getVisitorCount()
     {
         $query = "

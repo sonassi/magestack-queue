@@ -19,11 +19,11 @@ return [
 
     // Maximim number of users on site at any time
     // Set value to -1 to force everyone into the queue
-    'threshold' => 1,
+    'threshold' => 100,
 
     // Period of time a user can be idle in queue before being
     // kicked out (in seconds)
-    'timer' => 1,
+    'timer' => 600,
 
     // Google anayltics tracking code
     'ga_code' => '',
