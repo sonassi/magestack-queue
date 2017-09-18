@@ -23,7 +23,7 @@ return [
 
     // Period of time a user can be idle in queue before being
     // kicked out (in seconds)
-    'timer' => 60,
+    'timer' => 300,
 
     // Google anayltics tracking code
     'ga_code' => '',
@@ -37,9 +37,8 @@ return [
         'user' => '',
         'password' => '',
         'host' => '',
+        'queue_table' => 'queue',
     ],
-
-    'table_name' => 'queue',
 
     'path' => realpath(dirname(__FILE__))
 ];

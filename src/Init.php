@@ -96,6 +96,7 @@ Time on site:    {$this->config['timer']} seconds
 Users in queue:  {$results['visitors_in_queue']}
 Users on site:   {$results['visitors_on_site']}
 Total users:     {$results['total_visitors']}
+Average wait:    {$this->queue->getAverageWaitTime()}
 
 Visitors
 ========
@@ -108,8 +109,8 @@ STATUS;
         foreach ($results['visitors'] as $visitor) {
             printf(
                 $mask,
-                $position,
-                $visitor['ip'],
+                $visitor['position'],
+                long2ip($visitor['ip']),
                 ($visitor['is_queueing']) ? 'Queuing' : 'Browsing'
             );
             if ($visitor['is_queueing'] == 1)

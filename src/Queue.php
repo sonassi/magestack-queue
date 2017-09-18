@@ -29,7 +29,8 @@ class Queue
                 break;
         }
 
-        $this->tableName = $config['table_name'];
+        $this->queueTable = $config['database']['queue_table'];
+        $this->metricsTable = $config['database']['metrics_table'];
         $this->threshold = $config['threshold'];
         $this->timer = $config['timer'];
         $this->path = $config['path'];
@@ -39,15 +40,23 @@ class Queue
 
     public function createTable()
     {
+        $query = "DROP TABLE {$this->queueTable};";
+        $result = $this->db->exec($query);
+
         $query = "
-            CREATE TABLE IF NOT EXISTS {$this->tableName} (
-            ip VARCHAR(50) NOT NULL UNIQUE,
+            CREATE TABLE IF NOT EXISTS {$this->queueTable} (
+            ip BIGINT(10) NOT NULL UNIQUE,
+            eta INT(10) NULL DEFAULT 0,
+            position INT(10) NOT NULL DEFAULT 0,
             is_queueing BOOLEAN NOT NULL DEFAULT 0,
             created_at TIMESTAMP NULL DEFAULT NULL,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             entered_at TIMESTAMP NULL DEFAULT NULL,
-            waiting_time INT(5) NOT NULL DEFAULT 0)";
+            waiting_time INT(5) NOT NULL DEFAULT ".$this->timer.");
+        ";
+        $result = $this->db->exec($query);
 
+        $query = "CREATE INDEX queue_index ON {$this->queueTable} (is_queueing, ip, updated_at);";
         $result = $this->db->exec($query);
 
         return $result;
@@ -55,7 +64,7 @@ class Queue
 
     public function flushQueue()
     {
-        $query = "DELETE FROM {$this->tableName}";
+        $query = "DELETE FROM {$this->queueTable}";
         return ($this->db->query($query)) ? true : false;
     }
 
@@ -63,8 +72,8 @@ class Queue
     {
         for ($i = 0; $i <= $queueSize; $i++) {
             $ip = long2ip(rand(167772160, 184549375));
-            $inQueue = ($i >= $this->threshold) ? 1 : 0;
-            $this->insertOrUpdateVisitor($ip, $inQueue);
+            $isQueueing = ($i >= $this->threshold) ? 1 : 0;
+            $this->insertOrUpdateVisitor($ip, $isQueueing);
         }
     }
 
@@ -72,7 +81,8 @@ class Queue
     {
         $query = "
             SELECT *
-            FROM {$this->tableName}";
+            FROM {$this->queueTable}
+            ORDER BY position";
         $result = $this->db->query($query);
 
         $visitors = [];
@@ -95,7 +105,7 @@ class Queue
     {
         $query = "
             SELECT count(ip) AS counter
-            FROM {$this->tableName}
+            FROM {$this->queueTable}
             WHERE is_queueing = 0";
         $result = $this->db->query($query);
         $row = $result->fetchArray();
@@ -103,37 +113,48 @@ class Queue
         return isset($row['counter']) ? (int) $row['counter'] : 0;
     }
 
-    public function insertOrUpdateVisitor($ip, $queue = 0)
+    public function insertOrUpdateVisitor($ip, $isQueuing = 0)
     {
         $existingData = $this->getDataByIp($ip);
 
         if (!$existingData) {
+            // MySQL can't do subquery on same table
+            $query = "SELECT (IFNULL(MAX(position), 0) + 1) AS position FROM {$this->queueTable} WHERE is_queueing = 1";
+            $result = $this->db->query($query);
+            $position = $result->fetchArray()['position'];
+
             $query = "
-                INSERT INTO {$this->tableName} (ip, is_queueing, created_at)
-                VALUES ('{$ip}', {$queue}, '" . date('Y-m-d H:i:s') . "')";
+                INSERT INTO {$this->queueTable} (ip, is_queueing, created_at, position, eta)
+                VALUES (
+                    " . ip2long($ip) . ",
+                    {$isQueuing},
+                    '" . date('Y-m-d H:i:s') . "',
+                    $position,
+                    " . (time() + $this->getAverageWaitTime()) . "
+                )";
             $createdAt = date('Y-m-d H:i:s');
         } else {
             $query = "
-                UPDATE {$this->tableName}
-                SET is_queueing = {$queue}
-                WHERE ip = '{$ip}'";
+                UPDATE {$this->queueTable}
+                SET is_queueing = {$isQueuing}
+                WHERE ip = '".ip2long($ip)."'";
             $createdAt = $existingData['created_at'];
         }
 
         $result = $this->db->exec($query);
 
-        if (!$queue) {
+        if (!$isQueuing) {
             $waitingTime = time() - strtotime($createdAt);
 
             $query = "
-                UPDATE {$this->tableName}
+                UPDATE {$this->queueTable}
                 SET entered_at = '" . date('Y-m-d H:i:s') . "', waiting_time = {$waitingTime}
-                WHERE ip = '{$ip}'";
+                WHERE ip = '".ip2long($ip)."'";
             $result = $this->db->exec($query);
 
-            setcookie('queue_status', 'bypass', time() + $this->timer*3600);
+            setcookie('queue_status', 'bypass', time() + $this->timer * 3600);
         } else
-            setcookie('queue_status', 'queueing', time() + $this->timer*3600);
+            setcookie('queue_status', 'queueing', time() + $this->timer * 3600);
 
 
         return $result;
@@ -142,9 +163,9 @@ class Queue
     public function updateVisitorActivity($ip)
     {
         $query = "
-            UPDATE {$this->tableName}
+            UPDATE {$this->queueTable}
             SET updated_at = '" . date('Y-m-d H:i:s') . "'
-            WHERE ip = '{$ip}'";
+            WHERE ip = '".ip2long($ip)."'";
         $result = $this->db->exec($query);
 
         return $result;
@@ -154,8 +175,8 @@ class Queue
     {
         $query = "
             SELECT *
-            FROM {$this->tableName}
-            WHERE ip = '{$ip}'";
+            FROM {$this->queueTable}
+            WHERE ip = '".ip2long($ip)."'";
         $result = $this->db->query($query);
         $row = $result->fetchArray();
 
@@ -186,29 +207,50 @@ class Queue
         return false;
     }
 
-    public function getPosition($ip)
+    /*
+     * This method is used on each queue user request
+     * It should be as efficient as possible
+     */
+    public function getQueueStats($ip)
     {
         $query = "
-            SELECT ip
-            FROM {$this->tableName}
-            WHERE is_queueing = 1";
+            SELECT eta, position, (
+                    SELECT count(ip) AS total
+                    FROM {$this->queueTable}
+                    WHERE is_queueing = 1
+                ) as total
+            FROM {$this->queueTable}
+            WHERE ip = '".ip2long($ip)."'";
         $result = $this->db->query($query);
+        $row = $result->fetchArray();
 
-        $pos = 1;
-        while ($row = $result->fetchArray()) {
-            if ($row['ip'] == $ip)
-                return $pos;
+        if ($row['eta'] - time() <= 1)
+            $row['eta'] = time() + $this->timer;
 
-            $pos++;
-        }
+        return $row;
+    }
 
-        return false;
+    public function getAverageWaitTime()
+    {
+        // Calculate the average wait time
+        $query = "
+            SELECT AVG(waiting_time) as avg_waiting_time
+            FROM  {$this->queueTable}
+            WHERE is_queueing = 0";
+        $result = $this->db->query($query);
+        $avgWaitTime = $result->fetchArray()['avg_waiting_time'];
+
+        if (is_null($avgWaitTime) || $avgWaitTime < 0)
+            $avgWaitTime = $this->timer;
+
+        return round($avgWaitTime, 0);
     }
 
     public function updateQueueEntries()
     {
+        // Kick users out of the site/queue that are inactive
         $query = "
-            DELETE FROM {$this->tableName}
+            DELETE FROM {$this->queueTable}
             WHERE updated_at < '". date('Y-m-d H:i:s', time() - $this->timer) . "'";
         $result = $this->db->exec($query);
 
@@ -220,35 +262,51 @@ class Queue
         // Ie. Limit in subquery
         if ($slotsAvailable > 0) {
             $query = "
-                SELECT ip
-                FROM  {$this->tableName}
-                WHERE is_queueing = 1
-                ORDER BY updated_at
-                DESC LIMIT 0, {$slotsAvailable}";
-            $result = $this->db->query($query);
-
-            $ips = [];
-            while ($row = $result->fetchArray()) {
-                $ips[] = $row['ip'];
-            }
-
-            if (count($ips)) {
-                $ips = implode("','", $ips);
-                $query = "
-                    UPDATE {$this->tableName}
-                    SET is_queueing = 0
-                    WHERE ip IN ('{$ips}')";
-                $result = $this->db->exec($query);
-            }
+                UPDATE {$this->queueTable}
+                SET is_queueing = 0, position = 0, updated_at = '" . date('Y-m-d H:i:s') . "'
+                WHERE ip IN (
+                    SELECT ip
+                    FROM  {$this->queueTable}
+                    WHERE is_queueing = 1
+                    ORDER BY position ASC
+                    LIMIT 0, {$slotsAvailable}
+                )";
+            $result = $this->db->exec($query);
         }
+
+        // Clean up position for users who directly entered the site
+        $query = "
+            UPDATE {$this->queueTable}
+            SET position = 0
+            WHERE is_queueing  = 0";
+        $result = $this->db->exec($query);
+
+        $query = "
+            SELECT MIN(position) as min_position
+            FROM {$this->queueTable}
+            WHERE is_queueing  = 1";
+        $result = $this->db->query($query);
+        $positionOffset = $result->fetchArray()['min_position'] - 1;
+
+        $query = "
+            UPDATE {$this->queueTable}
+            SET position = position - {$positionOffset}
+            WHERE is_queueing  = 1";
+        $result = $this->db->exec($query);
+
     }
 
     public function showQueueAndDie($ip)
     {
+        $stats = $this->getQueueStats($ip);
+
+        $stats['eta'] = round(($stats['eta'] - time()) / 60, 0);
+        $stats['position'] = ($stats['position'] == 0) ? '~' : $stats['position'];
+
         $template = file_get_contents($this->path . '/src/view/queue-landing.phtml');
         $template = str_ireplace(
-            ['{{queue_position}}', '{{remote_addr}}'],
-            [$this->getPosition($ip), $ip],
+            ['{{queue.position}}', '{{queue.eta}}', '{{queue.total}}', '{{remote_addr}}', '{{server.http_host}}', '{{date.year}}'],
+            [$stats['position'], $stats['eta'], $stats['total'], $ip, htmlentities($_SERVER['HTTP_HOST']), date('Y')],
             $template);
 
         header('HTTP/1.1 503 Service Temporarily Unavailable');

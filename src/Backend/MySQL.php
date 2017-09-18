@@ -18,6 +18,8 @@ class MySQL implements Driver
             printf("Database connection failed: %s\n");
             exit();
         }
+
+        self::$instance->query("SET @@session.time_zone='+00:00'");
     }
 
     public function query($query)

@@ -1,5 +1,8 @@
 <?php
 
+// SQLite uses UTC by default
+date_default_timezone_set('UTC');
+
 // We deliberately do not use an autoloader to reduce overhead
 require_once realpath(__DIR__) . '/src/Init.php';
 require_once realpath(__DIR__) . '/src/Queue.php';
