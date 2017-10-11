@@ -8,7 +8,7 @@ class Init
     {
         $this->config = include realpath(__DIR__) . '/../config.php';
 
-        if ($this->shouldInit($this->config['whitelist'])) {
+        if ($this->shouldInit($this->config['whitelist']) && $this->config['enabled']) {
 
             $this->queue = new Queue($this->config);
 
