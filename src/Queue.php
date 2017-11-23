@@ -34,6 +34,7 @@ class Queue
         $this->threshold = $config['threshold'];
         $this->timer = $config['timer'];
         $this->path = $config['path'];
+        $this->gaCode = $config['ga_code'];
 
         return $this;
     }
@@ -305,8 +306,8 @@ class Queue
 
         $template = file_get_contents($this->path . '/src/view/queue-landing.phtml');
         $template = str_ireplace(
-            ['{{queue.position}}', '{{queue.eta}}', '{{queue.total}}', '{{remote_addr}}', '{{server.http_host}}', '{{date.year}}'],
-            [$stats['position'], $stats['eta'], $stats['total'], $ip, htmlentities($_SERVER['HTTP_HOST']), date('Y')],
+            ['{{queue.position}}', '{{queue.eta}}', '{{queue.total}}', '{{remote_addr}}', '{{server.http_host}}', '{{date.year}}', '{{ga_code}}'],
+            [$stats['position'], $stats['eta'], $stats['total'], $ip, htmlentities($_SERVER['HTTP_HOST']), date('Y'), $this->gaCode],
             $template);
 
         header('HTTP/1.1 503 Service Temporarily Unavailable');
